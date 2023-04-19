@@ -12,6 +12,8 @@ let
     cabalProject = ''
       packages: .
       allow-newer: aeson:*
+    '' + lib.optionalString (__elem compiler-nix-name ["ghc96020230302" "ghc961"]) ''
+      allow-newer: *:base, *:ghc-prim, *:template-haskell
     '';
   };
   pkgSet = mkCabalProjectPkgSet {
@@ -38,7 +40,11 @@ in recurseIntoAttrs {
       touch $out
     '';
 
-    meta.platforms = platforms.all;
+    meta = rec {
+      platforms = lib.platforms.all;
+      broken = stdenv.hostPlatform.isGhcjs && __elem compiler-nix-name ["ghc961"];
+      disabled = broken;
+    };
 
     passthru = {
       # Attributes used for debugging with nix repl

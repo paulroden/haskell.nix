@@ -15,6 +15,11 @@ in {
       type = str;
       description = "The name of the ghc compiler to use eg. \"ghc884\"";
     };
+    compilerSelection = mkOption {
+      type = unspecified;
+      default = p: p.haskell-nix.compiler;
+      description = "Use GHC from pkgs.haskell instead of pkgs.haskell-nix";
+    };
     index-state = mkOption {
       type = nullOr str;
       default = null;
@@ -106,6 +111,7 @@ in {
       description = ''
         Specifies the contents of urls in the cabal.project file.
         The `.rev` attribute is checked against the `tag` for `source-repository-packages`.
+        # FIXME is the following still relevant?
         For `revision` blocks the `inputMap.<url>` will be used and
         they `.tar.gz` for the `packages` used will also be looked up
         in the `inputMap`.
@@ -118,6 +124,10 @@ in {
     source-repo-override = mkOption {
       type = attrsOf (functionTo attrs);
       default = {};
+    };
+    supportHpack = mkOption {
+      type = bool;
+      default = false;
     };
 
     # Used by mkCabalProjectPkgSet

@@ -1,17 +1,16 @@
-{ stdenv, lib, util, mkPkgSet, recurseIntoAttrs, testSrc, compiler-nix-name, evalPackages }:
+{ stdenv, lib, util, cabalProject', recurseIntoAttrs, testSrc, compiler-nix-name, evalPackages }:
 
 with lib;
 with util;
 
 let
-  pkgs = import ./pkgs.nix;
-  pkgSet = doExactConfig: mkPkgSet {
-    # generated with:
-    #   cabal new-build
-    #   plan-to-nix -o .
-    pkg-def = pkgs.pkgs;
-    pkg-def-extras = [ pkgs.extras ];
-    modules = pkgs.modules ++ [
+  project = doExactConfig: cabalProject' {
+    inherit compiler-nix-name evalPackages;
+    src = testSrc "with-packages";
+    cabalProjectLocal = lib.optionalString (__elem compiler-nix-name ["ghc96020230302" "ghc961"]) ''
+      allow-newer: *:base, *:ghc-prim, *:template-haskell
+    '';
+    modules = [
       # overrides to fix the build
       {
         packages.transformers-compat.components.library.doExactConfig = true;
@@ -26,7 +25,7 @@ let
     ];
   };
 
-  packages = doExactConfig: (pkgSet doExactConfig).config.hsPkgs;
+  packages = doExactConfig: (project doExactConfig).hsPkgs;
 
   package = doExactConfig: (packages doExactConfig).test-with-packages;
 
@@ -38,18 +37,29 @@ let
   extraFlags = "";
 
 in recurseIntoAttrs {
-  meta.disabled = compiler-nix-name != "ghc865";
   # Used for testing externally with nix-shell (../tests.sh).
   # This just adds cabal-install to the existing shells.
-  test-shell = addCabalInstall library;
+  test-shell = (addCabalInstall library.shell).overrideAttrs (_: _: {
+    meta = rec {
+      platforms = lib.platforms.all;
+      broken = stdenv.hostPlatform.isGhcjs && __elem compiler-nix-name ["ghc961"];
+      disabled = broken;
+    };
+  });
 
   # A variant of test-shell with the component option doExactConfig enabled
-  test-shell-dec = addCabalInstall decLibrary;
+  test-shell-dec = (addCabalInstall decLibrary.shell).overrideAttrs (_: _: {
+    meta = rec {
+      platforms = lib.platforms.all;
+      broken = stdenv.hostPlatform.isGhcjs && __elem compiler-nix-name ["ghc961"];
+      disabled = broken;
+    };
+  });
 
   run = stdenv.mkDerivation {
     name = "with-packages-test";
-    decLibraryDepends = showDepends (pkgSet true).config.packages.test-with-packages.components.library;
-    libraryDepends = showDepends (pkgSet false).config.packages.test-with-packages.components.library;
+    decLibraryDepends = showDepends (project true).pkg-set.config.packages.test-with-packages.components.library;
+    libraryDepends = showDepends (project false).pkg-set.config.packages.test-with-packages.components.library;
 
     src = ./.;
 
@@ -96,14 +106,15 @@ in recurseIntoAttrs {
 
     dontInstall = true;
 
-    meta = {
-      platforms = platforms.all;
-      disabled = stdenv.hostPlatform.isMusl;
+    meta = rec {
+      platforms = lib.platforms.all;
+      broken = (stdenv.hostPlatform.isGhcjs && __elem compiler-nix-name ["ghc961"]) || stdenv.hostPlatform.isMusl;
+      disabled = broken;
     };
 
     passthru = {
       # Used for debugging with nix repl
-      inherit packages pkgSet;
+      inherit packages project;
     };
   };
 }

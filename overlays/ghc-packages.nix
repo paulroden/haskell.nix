@@ -44,9 +44,9 @@ let
           materialized = materialized-dir + "/ghc-boot-packages-nix/${ghcName +
               # The 3434.patch we apply to fix linking on arm systems changes ghc-prim.cabal
               # so it needs its own materialization.
-              final.lib.optionalString final.targetPlatform.isAarch64 "-aarch64"
+              final.lib.optionalString final.stdenv.targetPlatform.isAarch64 "-aarch64"
               # GHCJS bytestring and libiserv versions differs
-              + final.lib.optionalString final.hostPlatform.isGhcjs "-ghcjs"
+              + final.lib.optionalString final.stdenv.hostPlatform.isGhcjs "-ghcjs"
             }";
         } // final.lib.optionalAttrs unchecked {
           checkMaterialization = false;
@@ -66,9 +66,15 @@ let
       ghc-prim     = "libraries/ghc-prim";
       hpc          = "libraries/hpc";
       integer-gmp  = "libraries/integer-gmp";
-      libiserv     = "libraries/libiserv";
       template-haskell = "libraries/template-haskell";
       iserv        = "utils/iserv";
+    } // final.lib.optionalAttrs (!final.stdenv.hostPlatform.isGhcjs || builtins.compareVersions ghcVersion "9.6" < 0) {
+      libiserv     = "libraries/libiserv";
+    } // final.lib.optionalAttrs (builtins.compareVersions ghcVersion "9.6" > 0) {
+      Cabal        = "libraries/Cabal/Cabal";
+      Cabal-syntax = "libraries/Cabal/Cabal-syntax";
+      cabal-install = "libraries/Cabal/cabal-install";
+      cabal-install-solver = "libraries/Cabal/cabal-install-solver";
     } // final.lib.optionalAttrs (!final.stdenv.hostPlatform.isGhcjs) {
       ghc          = "compiler";
       ghc-boot     = "libraries/ghc-boot";
@@ -200,7 +206,8 @@ in rec {
     let package-locs =
         # TODO ghc-heap.cabal requires cabal 3.  We should update the cabalProject' call
         # in `ghc-extra-projects` below to work with this.
-        (final.lib.filterAttrs (n: _: !(builtins.elem n [ "base" "ghc-heap" "ghc-bignum" "ghc-prim" "integer-gmp" "template-haskell" "pretty" "bytestring" "deepseq" ])) (ghc-extra-pkgs ghc.version));
+        (final.lib.filterAttrs (n: _: !(builtins.elem n [ "base" "ghc-heap" "ghc-bignum" "ghc-prim" "integer-gmp" "template-haskell" "pretty" "bytestring" "deepseq"
+           "Cabal" "Cabal-syntax" "cabal-install" "cabal-install-solver" ])) (ghc-extra-pkgs ghc.version));
       cabalProject = ''
         packages: ${final.lib.concatStringsSep " " (final.lib.attrValues package-locs)}
         allow-newer: iserv-proxy:bytestring, network:bytestring, iserv-proxy:containers

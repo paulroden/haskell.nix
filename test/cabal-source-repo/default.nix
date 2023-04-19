@@ -6,6 +6,9 @@ let
   project = cabalProject' {
     inherit compiler-nix-name evalPackages;
     src = testSrc "cabal-source-repo";
+    cabalProjectLocal = lib.optionalString (__elem compiler-nix-name ["ghc96020230302" "ghc961"]) ''
+      allow-newer: *:base, *:ghc-prim, *:template-haskell
+    '';
   };
   packages = project.hsPkgs;
 in recurseIntoAttrs {
@@ -24,7 +27,11 @@ in recurseIntoAttrs {
       touch $out
     '';
 
-    meta.platforms = platforms.all;
+    meta = rec {
+      platforms = lib.platforms.all;
+      broken = stdenv.hostPlatform.isGhcjs && __elem compiler-nix-name ["ghc961"];
+      disabled = broken;
+    };
 
     passthru = {
       # Attributes used for debugging with nix repl
